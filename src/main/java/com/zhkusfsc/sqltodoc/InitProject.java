@@ -10,12 +10,14 @@ import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -30,18 +32,28 @@ public class InitProject implements CommandLineRunner {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+    private Connection conn;
+    @PostConstruct
+    public void init(){
+        try {
+            conn = jdbcTemplate.getDataSource().getConnection();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 
     private List<TableInfo> list = new ArrayList<>();
     private String systemName = "测试系统";
     private String userName = "史创雄";
     private String dateTime = "2020-10-10";
+    private String database = "pureshare_higou";
     List<String> rowValueList;
 
     @Override
     public void run(String... args) throws Exception {
         //获取数据库表
         List<Map<String, Object>> ll = jdbcTemplate.queryForList(
-                "select table_name,table_comment from information_schema.tables where table_schema='pureshare_base'");
+                "select table_name,table_comment from information_schema.tables where table_schema='"+database+"'");
         ll.forEach(t -> {
             try {
                 //获取单个表结构信息
@@ -227,8 +239,7 @@ public class InitProject implements CommandLineRunner {
      */
     private void getTableInfo(String tableName,String tableComment) throws Exception {
         List<ColumnInfo> columneList = new ArrayList<>();
-        Connection conn = jdbcTemplate.getDataSource().getConnection();
-        ResultSet rs = conn.getMetaData().getColumns(null, getSchema(conn),tableName.toUpperCase(), "%");
+        ResultSet rs = conn.getMetaData().getColumns(null, getSchema(),tableName.toUpperCase(), "%");
         while(rs.next()){
             columneList.add(new ColumnInfo(
                     rs.getString("COLUMN_NAME"),//列名
@@ -250,13 +261,11 @@ public class InitProject implements CommandLineRunner {
 
     /**
      * 判断数据库是否支持
-     * @param conn
      * @return
      * @throws Exception
      */
-    private String getSchema(Connection conn) throws Exception {
-        String schema;
-        schema = conn.getMetaData().getUserName();
+    private String getSchema() throws Exception {
+        String schema = conn.getMetaData().getUserName();
         if ((schema == null) || (schema.length() == 0)) {
             throw new Exception("ORACLE数据库模式不允许为空");
         }
